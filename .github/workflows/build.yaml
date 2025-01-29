@@ -1,0 +1,49 @@
+name: Application Build and Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    secrets:
+      aws-access-key-id:
+        required: true
+      aws-secret-access-key:
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install Dependencies
+        run: npm install
+      - name: Build Application
+        run: npm run build
+
+  start:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          aws-region: ap-south-1
+      - name: Deploy and Start Application
+        run: |
+          # Deploy to EC2 instances in ASG
+          aws ssm send-command \
+            --targets "Key=tag:Environment,Values=dev" \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands=[
+              "cd /opt/app",
+              "git pull",
+              "npm install",
+              "npm start"
+            ]
